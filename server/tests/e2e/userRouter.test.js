@@ -27,6 +27,7 @@ describe("Sign up api", () => {
       .post("/api/signup")
       .send(newUser)
       .expect(201);
+    console.log(response.body);
     createdUser = response.body;
     expect(response.body).toBeDefined();
     expect(response.body.name).toBe(newUser.name);
@@ -122,7 +123,8 @@ describe("Update user information api", () => {
 
     const response = await request(app)
       .put("/api/updateUser")
-      .set("Authorization", `Bearer ${createdUser.token}`)
+      .set("Authorization", `Bearer ${createdUser.token.accessToken}`)
+      .set("x-refresh-token", createdUser.token.refreshToken)
       .send(updateData)
       .expect(201);
 
@@ -172,7 +174,8 @@ describe("Update user information api", () => {
 
     const response = await request(app)
       .put("/api/updateUser")
-      .set("Authorization", `Bearer ${createdUser.token}`)
+      .set("Authorization", `Bearer ${createdUser.token.accessToken}`)
+      .set("x-refresh-token", createdUser.token.refreshToken)
       .send(updateData)
       .expect(500);
 

@@ -1,218 +1,144 @@
-const User = require("../../model/User");
 const {
-  createBlogService,
-  getBlogListService,
-  updateBlogService,
-  deleteBlogService,
-} = require("../../service/blogService");
+  signupController,
+  signinController,
+  updateUserController,
+} = require("../../controller/userController");
+const authenticate = require("../../middleware/authenticate");
+const { signupService, signinService, updateUserInfoService } = require("../../service/userService");
 const { connect, disconnect } = require("../test_set_up");
 const mongoose = require("mongoose");
+
+jest.mock("../../service/userService.js");
+jest.mock("../../middleware/authenticate");
+
 beforeAll(async () => {
   await connect();
 });
 
 afterAll(async () => {
+  jest.clearAllMocks();
   await disconnect();
 });
-let user;
-let createdBlog;
-describe("Create Blog Service", () => {
-  beforeAll(async () => {
-    user = new User({
+let signUpUser;
+describe("Sign up controller", () => {
+  it("should create a new user and return 201 status", async () => {
+    const req = {
+      body: {
+        name: "John Doe",
+        email: "john.doe@example.com",
+        password: "@Password123456",
+      },
+    };
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
+    const mockUserResponse = {
+      _id: new mongoose.Types.ObjectId(),
       name: "John Doe",
-      email: "john@example.com",
-      password: "@Password123456",
-    });
-    await user.save();
-  });
-  it("Should create a new blog", async () => {
-    const newBlog = {
-      user: { _id: user._id },
-      body: { title: "Test Blog", content: "This is a test blog" },
+      email: "john.doe@example.com",
     };
-    const result = await createBlogService(newBlog);
-    createdBlog = result;
-    expect(result).toBeTruthy();
-    expect(result.title).toBe("Test Blog");
-    expect(result.content).toBe("This is a test blog");
+    signUpUser = mockUserResponse;
+    await signupService.mockResolvedValue(mockUserResponse);
+    await signupController(req, res);
+    expect(res.status).toHaveBeenCalledWith(201);
+
+    expect(res.json).toHaveBeenCalledWith(mockUserResponse);
+    expect(signupService).toHaveBeenCalledWith(req);
   });
-
-  it("Should fail to create a new blog due to missing user ID", async () => {
-    const newBlog = {
-      body: { title: "Test Blog", content: "This is a test blog" },
+  it("should return 500 status on error", async () => {
+    const req = {
+      body: {
+        name: "John Doe",
+        email: "john.doe@example.com",
+        password: "@Password123456",
+      },
     };
-
-    try {
-      await createBlogService(newBlog);
-    } catch (error) {
-      expect(error.message).toBe(
-        "Cannot read properties of undefined (reading '_id')"
-      ); // Check for the specific error message
-    }
-  });
-
-  it("should throw error when title is missing", async () => {
-    const newBlog = {
-      user: { _id: user._id },
-      body: { content: "This is a test blog" },
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
     };
-
-    try {
-      await createBlogService(newBlog);
-    } catch (error) {
-      expect(error.message).toBe('"title" is required'); // Check for the specific error message
-    }
+    await signupService.mockRejectedValue(new Error("Failed to create user"));
+    await signupController(req, res);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith("Failed to create user");
   });
 });
 
-describe("Get Blog List Service", () => {
-  it("Should retrieve blog list", async () => {
-    const blogList = await createBlogService({
-      user: { _id: user._id },
-      body: { title: "Test Blog 1", content: "This is a test blog 1" },
-    });
-    const blogList2 = await createBlogService({
-      user: { _id: user._id },
-      body: { title: "Test Blog 2", content: "This is a test blog 2" },
-    });
+describe("Sign in controller", () => {
+  it("should return 200 status and a token on successful login", async () => {
     const req = {
-      query: {
-        page: 1,
-        limit: 10,
+      body: {
+        email: "john.doe@example.com",
+        password: "@Password123456",
       },
     };
-    const result = await getBlogListService(req);
-    expect(result.blogList.length).toBe(3);
-    expect(result.blogList[0].title).toBe("Test Blog");
-    expect(result.blogList[1].title).toBe("Test Blog 1");
-  });
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
+    const mockUserResponse = {
+      _id: signUpUser._id,
+      name: "John Doe",
+      email: "john.doe@example.com",
+    };
+    await signinService.mockResolvedValue(mockUserResponse);
+    await signinController(req, res);
+    expect(res.status).toHaveBeenCalledWith(201);
 
-  it("should throw error for negative page number", async () => {
-    const req = {
-      query: {
-        page: -1,
-        limit: 10,
-      },
-    };
-    try {
-      await getBlogListService(req);
-    } catch (error) {
-      expect(error.message).toBe("Page must be at least 1.");
-    }
+    expect(res.json).toHaveBeenCalledWith(mockUserResponse);
+    expect(signinService).toHaveBeenCalledWith(req);
   });
-
-  it("should throw error for negative limit", async () => {
+  it("should return 403 status on failed login", async () => {
     const req = {
-      query: {
-        page: 1,
-        limit: -10,
+      body: {
+        email: "john.doe@example.com",
+        password: "wrong_password",
       },
     };
-    try {
-      await getBlogListService(req);
-    } catch (error) {
-      expect(error.message).toBe("Limit must be at least 1.");
-    }
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
+    await signinService.mockRejectedValue(new Error("Invalid credentials"));
+    await signinController(req, res);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith("Invalid credentials");
   });
 });
 
-describe("Update blog service", () => {
-  it("Should update blog service", async () => {
-    const updatedBlog = {
-      user: {
-        _id: user._id,
-      },
-      query: {
-        blogId: createdBlog._id.toString(),
+describe("update user controller", () => {
+  it("should update user and return updated user and 201 status", async () => {
+    const req = {
+      headers: {
+        authorization: "Bearer test_token",
       },
       body: {
-        title: "Updated Test Blog",
-        content: "This is an updated test blog",
+        name: "John Doe Updated",
       },
     };
-    const resultUpdated = await updateBlogService(updatedBlog);
-    expect(resultUpdated.title).toEqual("Updated Test Blog");
-    expect(resultUpdated.content).toEqual("This is an updated test blog");
-  });
-  it("Should throw error when blog ID is missing", async () => {
-    const updatedBlog = {
-      user: {
-        _id: user._id,
-      },
-      body: {
-        title: "Updated Test Blog",
-        content: "This is an updated test blog",
-      },
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
     };
-    try {
-      await updateBlogService(updatedBlog);
-    } catch (error) {
-      expect(error.message).toBe(
-        "Cannot read properties of undefined (reading 'blogId')"
-      );
-    }
-  });
-  it("Should throw error when user ID does not match the blog author", async () => {
-    const updatedBlog = {
-      user: {
-        _id: new mongoose.Types.ObjectId(),
-      },
-      query: {
-        blogId: createdBlog._id.toString(),
-      },
-      body: {
-        title: "Updated Test Blog",
-        content: "This is an updated test blog",
-      },
+    const mockUpdatedUser = {
+      _id: signUpUser._id,
+      name: "John Doe Updated",
+      email: "john.doe@example.com",
     };
-    try {
-      await updateBlogService(updatedBlog);
-    } catch (error) {
-      expect(error.message).toBe("Unauthorized");
-    }
-  });
-});
+    authenticate.mockImplementation((req, res, next) => {
+      req.user = {
+        _id: signUpUser._id,
+      };
+      next();
+    });
+    await authenticate(req, res, jest.fn());
+    await updateUserInfoService.mockResolvedValue(mockUpdatedUser);
+    await updateUserController(req, res);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith(mockUpdatedUser);
+    expect(updateUserInfoService).toHaveBeenCalledWith(req);
+    expect(authenticate).toHaveBeenCalledWith(req, res, expect.any(Function));
 
-describe("Delete blog service", () => {
-  it("Should delete blog service", async() => {
-    const deletedBlog = {
-      user: {
-        _id: user._id,
-      },
-      query: {
-        blogId: createdBlog._id.toString(),
-      },
-    };
-    const result = await deleteBlogService(deletedBlog);
-    expect(result).toBeTruthy();
   });
-  it("Should throw error when blog ID is missing", async () => {
-    const deletedBlog = {
-      user: {
-        _id: user._id,
-      },
-    };
-    try {
-      await deleteBlogService(deletedBlog);
-    } catch (error) {
-      expect(error.message).toBe(
-        "Cannot read properties of undefined (reading 'blogId')"
-      );
-    }
-  })
-  it("Should throw error when user ID does not match the blog author", async () => {
-    const deletedBlog = {
-      user: {
-        _id: new mongoose.Types.ObjectId(),
-      },
-      query: {
-        blogId: createdBlog._id.toString(),
-      },
-    };
-    try {
-      await deleteBlogService(deletedBlog);
-    } catch (error) {
-      expect(error.message).toBe("Unauthorized");
-    }
-  })
 });

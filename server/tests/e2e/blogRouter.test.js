@@ -8,12 +8,16 @@ const User = require("../../model/User");
 const app = express();
 app.use(express.json());
 app.use("/api", blogRouter);
-let token;
+
+let testUser;
+let testAccessToken;
+let testRefreshToken;
+let testBlog;
+
 beforeAll(async () => {
   await connect();
 
-  let testUser;
-  let testBlog;
+ 
 
   // Create a user and obtain a token for authentication
 
@@ -23,7 +27,8 @@ beforeAll(async () => {
     password: "@Testpassword123456",
   });
   await testUser.save();
-  token = testUser.generateToken();
+  testAccessToken = await testUser.generateAccessToken();
+  testRefreshToken = await testUser.generateRefreshToken();
 });
 
 afterAll(async () => {
@@ -38,7 +43,8 @@ describe("Create blog api", () => {
     };
     const response = await request(app)
       .post("/api/createBlog")
-      .set("Authorization", `Bearer ${token}`)
+      .set("Authorization", `Bearer ${testAccessToken}`)
+      .set("x-refresh-token", testRefreshToken)
       .send(newBlog)
       .expect(201);
     testBlog = response.body;
@@ -71,6 +77,7 @@ describe("Create blog api", () => {
     const response = await request(app)
       .post("/api/createBlog")
       .set("Authorization", "Bearer invalidtoken")
+      .set("x-refresh-token", testRefreshToken)
       .send(newBlog)
       .expect(401);
     expect(response.body).toHaveProperty("error", "jwt malformed");
@@ -79,7 +86,8 @@ describe("Create blog api", () => {
     const newBlog = {};
     const response = await request(app)
       .post("/api/createBlog")
-      .set("Authorization", `Bearer ${token}`)
+      .set("Authorization", `Bearer ${testAccessToken}`)
+      .set("x-refresh-token", testRefreshToken)
       .send(newBlog)
       .expect(500);
     expect(response.body).toEqual('"title" is required');
@@ -130,7 +138,8 @@ describe("Update blog api", () => {
     };
     const response = await request(app)
       .put("/api/updateBlog")
-      .set("Authorization", `Bearer ${token}`)
+      .set("Authorization", `Bearer ${testAccessToken}`)
+      .set("x-refresh-token", testRefreshToken)
       .query({ blogId: testBlog._id })
       .send(updatedBlog)
       .expect(200);
@@ -160,6 +169,7 @@ describe("Update blog api", () => {
     const response = await request(app)
       .put("/api/updateBlog")
       .set("Authorization", "Bearer invalidtoken")
+      .set("x-refresh-token", testRefreshToken)
       .query({ blogId: testBlog._id })
       .send(updatedBlog)
       .expect(401);
@@ -172,7 +182,8 @@ describe("Update blog api", () => {
     };
     const response = await request(app)
       .put("/api/updateBlog")
-      .set("Authorization", `Bearer ${token}`)
+      .set("Authorization", `Bearer ${testAccessToken}`)
+      .set("x-refresh-token", testRefreshToken)
       .query({ blogId: "invalid_id" })
       .send(updatedBlog)
       .expect(401);
@@ -187,7 +198,8 @@ describe("Delete blog api", () => {
   it("Should delete blog api and return 200", async () => {
     const response = await request(app)
       .delete("/api/deleteBlog")
-      .set("Authorization", `Bearer ${token}`)
+      .set("Authorization", `Bearer ${testAccessToken}`)
+      .set("x-refresh-token", testRefreshToken)
       .query({ blogId: testBlog._id })
       .expect(200);
     expect(response.body).toBe("Delete Blog");
@@ -206,6 +218,7 @@ describe("Delete blog api", () => {
     const response = await request(app)
      .delete("/api/deleteBlog")
      .set("Authorization", "Bearer invalidtoken")
+     .set("x-refresh-token", testRefreshToken)
      .query({ blogId: testBlog._id })
      .expect(401);
     expect(response.body).toHaveProperty("error", "jwt malformed");
@@ -213,7 +226,8 @@ describe("Delete blog api", () => {
   it("Should return 401 if blog is not found", async () => {
     const response = await request(app)
      .delete("/api/deleteBlog")
-     .set("Authorization", `Bearer ${token}`)
+     .set("Authorization", `Bearer ${testAccessToken}`)
+     .set("x-refresh-token", testRefreshToken)
      .query({ blogId: "invalid_id" })
      .expect(401);
     expect(response.body).toHaveProperty(
@@ -224,7 +238,8 @@ describe("Delete blog api", () => {
   it("Should return 404 if user is not the owner of the blog", async () => {
     const response = await request(app)
      .delete("/api/deleteBlog")
-     .set("Authorization", `Bearer ${token}`)
+     .set("Authorization", `Bearer ${testAccessToken}`)
+     .set("x-refresh-token", testRefreshToken)
      .query({ blogId: "60877b8856565b10e4d0363d" }) // not the owner of this blog
      .expect(404);
     expect(response.body).toHaveProperty(
